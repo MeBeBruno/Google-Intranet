@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Admin</h1>
+<div class="row">
+  <div class="col card">
+    <h3>Nutzer</h3>
+    <table>
+      <thead><tr><th>ID</th><th>User</th><th>E-Mail</th><th>Rolle</th><th>2FA</th><th>Aktionen</th></tr></thead>
+      <tbody>
+        {% for u in users %}
+          <tr>
+            <td>{{ u.id }}</td>
+            <td>{{ u.username }}</td>
+            <td>{{ u.email or '-' }}</td>
+            <td>{{ u.role }}</td>
+            <td>{{ 'ja' if u.is_totp_confirmed else 'nein' }}</td>
+            <td>
+              <form method="post" action="{{ url_for('set_role', user_id=u.id) }}" style="display:inline;margin-right:.5rem">
+                <select name="role">
+                  <option value="user" {{ 'selected' if u.role=='user' else '' }}>user</option>
+                  <option value="admin" {{ 'selected' if u.role=='admin' else '' }}>admin</option>
+                </select>
+                <button>setzen</button>
+              </form>
+              <form method="post" action="{{ url_for('delete_user', user_id=u.id) }}" style="display:inline">
+                <button>löschen</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="muted">Keine Nutzer.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="col card">
+    <h3>Invite-Tokens</h3>
+    <form method="post" action="{{ url_for('generate_token') }}">
+      <label>Rolle<br>
+        <select name="role"><option>user</option><option>admin</option></select>
+      </label><br>
+      <label>Nutzungen<br><input name="uses" type="number" value="1" min="1"></label><br>
+      <label>Ablauf (Tage, optional)<br><input name="days" type="number" placeholder="z. B. 7"></label><br><br>
+      <button>Token erzeugen</button>
+    </form>
+    <p class="muted">Klartext-Code wird NUR direkt nach dem Erzeugen angezeigt (wird nicht gespeichert).</p>
+    <table>
+      <thead><tr><th>ID</th><th>Typ</th><th>Rolle</th><th>Rest</th><th>Gültig bis</th><th>Aktion</th></tr></thead>
+      <tbody>
+        {% for t in tokens %}
+          <tr>
+            <td>{{ t.id }}</td>
+            <td><span class="badge">{{ t.purpose }}</span></td>
+            <td>{{ t.role }}</td>
+            <td>{{ t.uses_remaining }}</td>
+            <td>{{ t.expires_at or '-' }}</td>
+            <td>
+              <form method="post" action="{{ url_for('delete_token', token_id=t.id) }}">
+                <button>löschen</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="muted">Keine Tokens.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

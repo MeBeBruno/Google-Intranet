@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Profil</h1>
+<div class="card">
+  <h3>2FA-Status</h3>
+  <p>{{ 'Aktiv' if current_user.is_totp_confirmed else 'Nicht eingerichtet' }}</p>
+  <form method="post">
+    <input type="hidden" name="action" value="reset-2fa">
+    <button>2FA zurücksetzen</button>
+  </form>
+</div>
+<div class="card">
+  <h3>Passwort ändern</h3>
+  <form method="post">
+    <input type="hidden" name="action" value="password">
+    <label>Altes Passwort<br><input name="old" type="password" required></label><br>
+    <label>Neues Passwort<br><input name="new" type="password" required></label><br><br>
+    <button>Ändern</button>
+  </form>
+</div>
+{% endblock %}

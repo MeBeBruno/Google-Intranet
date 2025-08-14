@@ -1,0 +1,9 @@
+flask>=3.0
+flask_sqlalchemy>=3.1
+flask_login>=0.6
+icalendar>=5.0
+pyotp>=2.9
+cryptography>=42.0
+qrcode>=7.4
+Pillow>=10.0
+python-dotenv>=1.0

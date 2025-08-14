@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Login</h1>
+<form method="post">
+  <div class="row">
+    <div class="col"><label>Username<br><input name="username" required></label></div>
+    <div class="col"><label>Passwort<br><input name="password" type="password" required></label></div>
+  </div>
+  <label>TOTP (6-stellig)<br><input name="totp" inputmode="numeric" pattern="[0-9]{6}" required></label><br><br>
+  <button>Login</button>
+</form>
+<p class="muted">Noch kein Konto? → <a href="{{ url_for('register') }}">Registrieren</a></p>
+{% endblock %}

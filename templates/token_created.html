@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Token erstellt</h1>
+<div class="card">
+  <p><b>Code (Klartext – jetzt kopieren, wird nicht gespeichert):</b><br>
+  <code>{{ code }}</code></p>
+  <p>Direktlink:<br><code>{{ link }}</code></p>
+  <pre>{{ qr_ascii }}</pre>
+  <p><a href="{{ url_for('admin_panel') }}">Zurück</a></p>
+</div>
+{% endblock %}
