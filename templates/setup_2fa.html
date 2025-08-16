@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>2FA einrichten</h1>
-<div class="card">
+<div class="panel grid">
   <p>Scanne den QR-Code mit deiner Authenticator-App (z. B. Aegis, Raivo, Google Authenticator):</p>
-  <img alt="2FA QR" src="{{ data_uri }}" style="image-rendering: pixelated; width:240px; height:240px;"><br>
+  <img alt="2FA QR" src="{{ qr_data_uri }}" width="240" height="240" style="image-rendering: pixelated;"/>
   <p class="muted">Oder manuell:<br><code>{{ otpauth }}</code></p>
-  <form method="post">
+  <form method="post" class="grid">
     <label>6-stelliger Code<br><input name="code" inputmode="numeric" pattern="[0-9]{6}" required></label>
-    <button>Bestätigen</button>
+    <div><button>Bestätigen</button></div>
   </form>
 </div>
 {% endblock %}

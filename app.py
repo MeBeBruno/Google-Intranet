@@ -46,6 +46,20 @@ login_manager = LoginManager(app)
 login_manager.login_view = "login"
 
 # =============================================================================
+# Zeit-Helfer (timezone-aware)
+# =============================================================================
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+def ensure_aware_utc(dt: datetime | None) -> datetime | None:
+    """Normalisiert naive Datetimes (alt) auf UTC-aware, damit Vergleiche sicher sind."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+# =============================================================================
 # Krypto-Utilities (TOTP-Secret Verschlüsselung at rest)
 # =============================================================================
 def _fernet_key_from_secret(secret: str) -> bytes:
@@ -71,10 +85,9 @@ class User(UserMixin, db.Model):
     role = db.Column(db.String(20), default="user")  # "user" | "admin"
     totp_secret_enc = db.Column(db.Text, nullable=True)
     is_totp_confirmed = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_utc)
     storage_quota_mb = db.Column(db.Integer, default=1024)
 
-    # Beziehungen (Cascade, damit beim Löschen aufgeräumt wird)
     calendars = db.relationship("Calendar", backref="owner", lazy=True, cascade="all, delete-orphan")
     media_files = db.relationship("MediaFile", backref="user", lazy=True, cascade="all, delete-orphan")
 
@@ -102,21 +115,21 @@ class Calendar(db.Model):
     owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     visibility = db.Column(db.String(20), default="private")  # private|org
     ics_token = db.Column(db.String(64), unique=True, nullable=False, index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_utc)
     events = db.relationship("Event", backref="calendar", lazy=True, cascade="all, delete-orphan")
 
 class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     calendar_id = db.Column(db.Integer, db.ForeignKey("calendar.id"), nullable=False, index=True)
     title = db.Column(db.String(200), nullable=False)
-    starts_at = db.Column(db.DateTime, nullable=False)   # UTC
-    ends_at = db.Column(db.DateTime, nullable=False)     # UTC
+    starts_at = db.Column(db.DateTime(timezone=True), nullable=False)   # UTC
+    ends_at = db.Column(db.DateTime(timezone=True),   nullable=False)   # UTC
     all_day = db.Column(db.Boolean, default=False)
     location = db.Column(db.String(200))
     description = db.Column(db.Text)
     uid = db.Column(db.String(120), unique=True, index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_utc)
+    updated_at = db.Column(db.DateTime(timezone=True), default=now_utc, onupdate=now_utc)
 
 class MediaFile(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -126,7 +139,7 @@ class MediaFile(db.Model):
     size_bytes = db.Column(db.Integer, nullable=False)
     sha256_hex = db.Column(db.String(64), index=True)
     data = db.Column(db.LargeBinary, nullable=False)  # BLOB
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_utc)
 
 class InviteToken(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -134,8 +147,8 @@ class InviteToken(db.Model):
     role = db.Column(db.String(20), default="user")       # "user" | "admin"
     uses_remaining = db.Column(db.Integer, default=1)
     purpose = db.Column(db.String(20), default="invite")  # "invite" | "bootstrap"
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    expires_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=now_utc)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
 
 # =============================================================================
@@ -147,12 +160,12 @@ def load_user(user_id: str):
 
 @app.before_request
 def sqlite_pragmas_and_2fa_gate():
-    # SQLite sicherer machen
+    # SQLite: sichere Defaults
     if db.engine.name == "sqlite":
         with db.engine.connect() as con:
             con.exec_driver_sql("PRAGMA journal_mode=WAL;")
             con.exec_driver_sql("PRAGMA foreign_keys=ON;")
-    # 2FA zwingend: Wer eingeloggt ist, muss zuerst 2FA abschließen
+    # 2FA Gate: erst 2FA abschließen
     allowed = {"setup_2fa", "logout", "static", "login", "register", "calendar_ics"}
     if current_user.is_authenticated and not current_user.is_totp_confirmed:
         endpoint = (request.endpoint or "").split(".")[-1]
@@ -168,12 +181,45 @@ def hash_token(code: str) -> str:
 def verify_token_hash(stored_hash: str, code: str) -> bool:
     return check_password_hash(stored_hash, code)
 
-def ascii_qr(text: str) -> str:
+# --- QR-Routinen --------------------------------------------------------------
+def ascii_qr_halfheight(text: str) -> str:
+    """
+    Kompakter ASCII-QR: nutzt Halbblock-Zeichen, um 2 QR-Zeilen auf 1 Terminalzeile
+    zu packen. Zeichen: '█' (beide), '▀' (oben), '▄' (unten), ' ' (keine).
+    """
     qr = qrcode.QRCode(border=1, box_size=1)
     qr.add_data(text)
     qr.make(fit=True)
-    m = qr.get_matrix()
-    return "\n".join("".join("██" if c else "  " for c in row) for row in m)
+    m = qr.get_matrix()  # bool-Matrix
+    lines = []
+    h = len(m)
+    w = len(m[0])
+    for y in range(0, h, 2):
+        upper = m[y]
+        lower = m[y+1] if y+1 < h else [False]*w
+        row_chars = []
+        for u, l in zip(upper, lower):
+            if u and l:
+                ch = "█"
+            elif u and not l:
+                ch = "▀"
+            elif not u and l:
+                ch = "▄"
+            else:
+                ch = " "
+            row_chars.append(ch)
+        lines.append("".join(row_chars))
+    return "\n".join(lines)
+
+def qr_png_data_uri(text: str, box_size: int = 6) -> str:
+    """PNG-QR als Data-URI für HTML."""
+    qr = qrcode.QRCode(border=1, box_size=box_size)
+    qr.add_data(text)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
 
 def print_bootstrap_instructions(link: str, code: str):
     banner = "="*72
@@ -181,7 +227,8 @@ def print_bootstrap_instructions(link: str, code: str):
     print(" ⚙️  ERSTKONFIGURATION – Admin-Registrierung")
     print(f" Link: {link}")
     print(f" Code: {code}\n")
-    print(ascii_qr(link))
+    # Nur Konsole (ASCII, halbierte Höhe dank Halbblock-Zeichen)
+    print(ascii_qr_halfheight(link))
     print(banner + "\n")
 
 def ensure_bootstrap_token_and_print():
@@ -195,7 +242,7 @@ def ensure_bootstrap_token_and_print():
         role="admin",
         uses_remaining=1,
         purpose="bootstrap",
-        expires_at=datetime.utcnow() + timedelta(days=2),
+        expires_at=now_utc() + timedelta(days=2),
         created_by_user_id=None
     )
     db.session.add(token); db.session.commit()
@@ -234,7 +281,8 @@ def register():
             for t in InviteToken.query.order_by(InviteToken.created_at.desc()).all():
                 if t.uses_remaining <= 0:
                     continue
-                if t.expires_at and datetime.utcnow() > t.expires_at:
+                exp = ensure_aware_utc(t.expires_at)
+                if exp and now_utc() > exp:
                     continue
                 if verify_token_hash(t.code_hash, invite):
                     token = t
@@ -296,10 +344,8 @@ def setup_2fa():
     label = f"{issuer}:{current_user.username}"
     otpauth = totp.provisioning_uri(name=label, issuer_name=issuer)
 
-    # QR als data:image/png einbetten
-    buf = io.BytesIO()
-    qrcode.make(otpauth).save(buf, format="PNG")
-    data_uri = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    # QR als PNG (Data-URI) für die Seite
+    qr_data_uri = qr_png_data_uri(otpauth, box_size=6)
 
     if request.method == "POST":
         code = request.form.get("code","").strip()
@@ -311,7 +357,7 @@ def setup_2fa():
         else:
             flash("TOTP-Code ungültig. Bitte erneut versuchen.", "error")
 
-    return render_template("setup_2fa.html", data_uri=data_uri, otpauth=otpauth)
+    return render_template("setup_2fa.html", qr_data_uri=qr_data_uri, otpauth=otpauth)
 
 # Login (mit TOTP)
 @app.route("/login", methods=["GET","POST"])
@@ -551,7 +597,7 @@ def generate_token():
     expires = None
     if days:
         try:
-            expires = datetime.utcnow() + timedelta(days=int(days))
+            expires = now_utc() + timedelta(days=int(days))
         except Exception:
             expires = None
 
@@ -566,8 +612,8 @@ def generate_token():
     )
     db.session.add(token); db.session.commit()
     link = f"{EXTERNAL_URL}/register?invite={code}&role={role}"
-    qr_ascii = ascii_qr(link)
-    return render_template("token_created.html", code=code, link=link, qr_ascii=qr_ascii)
+    qr_data_uri = qr_png_data_uri(link, box_size=6)  # Seite: Bild, kein ASCII
+    return render_template("token_created.html", code=code, link=link, qr_data_uri=qr_data_uri)
 
 @app.route("/admin/token/<int:token_id>/delete", methods=["POST"])
 @login_required

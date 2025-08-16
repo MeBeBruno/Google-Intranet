@@ -1,25 +1,35 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Dashboard</h1>
-<div class="row">
-  <div class="col card">
-    <h3>Medien-Upload</h3>
-    <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data">
-      <input type="file" name="file"><button>Hochladen</button>
+<div class="grid cols-2">
+  <div class="panel">
+    <h2>Medien-Upload</h2>
+    <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data" class="grid">
+      <input type="file" name="file">
+      <div><button>Hochladen</button></div>
     </form>
-    <ul>
-      {% for f in files %}
-        <li><a href="{{ url_for('download_file', file_id=f.id) }}">{{ f.filename }}</a> ({{ f.mimetype or "?" }}, {{ f.size_bytes }} B)</li>
-      {% else %}
-        <li class="muted">Noch keine Dateien.</li>
-      {% endfor %}
-    </ul>
+    <div class="spacer"></div>
+    <table>
+      <thead><tr><th>Datei</th><th>Typ</th><th>Größe</th></tr></thead>
+      <tbody>
+        {% for f in files %}
+          <tr>
+            <td><a href="{{ url_for('download_file', file_id=f.id) }}">{{ f.filename }}</a></td>
+            <td>{{ f.mimetype or "?" }}</td>
+            <td>{{ f.size_bytes }} B</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="3" class="muted">Noch keine Dateien.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
-  <div class="col card">
-    <h3>Kalender</h3>
+
+  <div class="panel">
+    <h2>Kalender</h2>
     <p>ICS-Feed (read-only):<br><code>{{ ics_url }}</code></p>
     <form method="post" action="{{ url_for('rotate_token', cal_id=cal.id) }}">
-      <button>ICS-Token rotieren</button>
+      <button class="secondary">ICS-Token rotieren</button>
     </form>
   </div>
 </div>

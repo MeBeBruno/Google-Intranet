@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Registrieren</h1>
-<form method="post">
-  <div class="row">
-    <div class="col"><label>Username<br><input name="username" required></label></div>
-    <div class="col"><label>E-Mail (optional)<br><input name="email" type="email"></label></div>
-  </div>
-  <label>Passwort<br><input name="password" type="password" required></label><br><br>
-  <label>Invite-Code (Pflicht)<br>
-    <input name="invite_code" value="{{ invite_prefill }}" required>
-  </label>
-  <p class="muted">Tipp: Per URL-Parameter <code>?invite=...</code> vorbelegen – das Feld wird automatisch befüllt.</p>
-  <button>Registrieren</button>
-</form>
+<div class="panel">
+  <form method="post" class="grid">
+    <div class="grid cols-2">
+      <label>Username<br><input name="username" required></label>
+      <label>E-Mail (optional)<br><input name="email" type="email"></label>
+    </div>
+    <label>Passwort<br><input name="password" type="password" required></label>
+    <label>Invite-Code (Pflicht)<br><input name="invite_code" value="{{ invite_prefill }}" required></label>
+    <p class="muted">Tipp: Per URL-Parameter <code>?invite=...</code> vorbelegen – das Feld wird automatisch befüllt.</p>
+    <div><button>Registrieren</button></div>
+  </form>
+</div>
 {% endblock %}

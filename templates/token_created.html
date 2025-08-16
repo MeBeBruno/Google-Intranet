@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Token erstellt</h1>
-<div class="card">
+<div class="panel grid">
   <p><b>Code (Klartext – jetzt kopieren, wird nicht gespeichert):</b><br>
   <code>{{ code }}</code></p>
   <p>Direktlink:<br><code>{{ link }}</code></p>
-  <pre>{{ qr_ascii }}</pre>
-  <p><a href="{{ url_for('admin_panel') }}">Zurück</a></p>
+  <img alt="Invite QR" src="{{ qr_data_uri }}" width="240" height="240" style="image-rendering: pixelated;" />
+  <div><a href="{{ url_for('admin_panel') }}"><button class="secondary">Zurück</button></a></div>
 </div>
 {% endblock %}
